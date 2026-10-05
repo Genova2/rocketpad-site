@@ -1,0 +1,32 @@
+# Layer applied when a profile lists this bundle.
+# Requires: ADO_ORG (organization name). Optional: ADO_TENANT_ID, ADO_AUTH
+# (azcli | env | interactive | pat | envvar; default azcli), ADO_MODE
+# (read-only | read-write; default read-only), ADO_WRITES (ask | allow; default ask).
+#
+# Service-principal auth (ADO_AUTH=env) needs AZURE_CLIENT_ID, AZURE_TENANT_ID and
+# AZURE_CLIENT_SECRET. dsh scrubs ambient names matching KEY|PASSWORD|SECRET|TOKEN
+# from the MCP child process, so the secret is forwarded explicitly below.
+- insert:
+    - id: ado-mcp
+      name: '@deepseek-ai/dsh-mcp-client'
+      config:
+        serverName: ado
+        transport: stdio
+        command: npx
+        args: !!js >-
+          ['-y', '@azure-devops/mcp@2.10.0', process.env.ADO_ORG,
+           '--authentication', process.env.ADO_AUTH || 'azcli',
+           '--domains', 'repositories', 'work-items', 'pipelines', 'search',
+           ...(process.env.ADO_TENANT_ID ? ['--tenant', process.env.ADO_TENANT_ID] : [])]
+        env: !!js >-
+          ({ ...(process.env.AZURE_CLIENT_SECRET ? { AZURE_CLIENT_SECRET: process.env.AZURE_CLIENT_SECRET } : {}),
+             ...(process.env.ADO_MCP_AUTH_TOKEN ? { ADO_MCP_AUTH_TOKEN: process.env.ADO_MCP_AUTH_TOKEN } : {}),
+             ...(process.env.PERSONAL_ACCESS_TOKEN ? { PERSONAL_ACCESS_TOKEN: process.env.PERSONAL_ACCESS_TOKEN } : {}) })
+        toolCallTimeoutMs: 60000
+        failOnStartupError: true
+    - id: ado-policy
+      name: dsh-azure-devops
+      config:
+        serverName: ado
+        mode: !!js process.env.ADO_MODE || 'read-only'
+        writes: !!js process.env.ADO_WRITES || 'ask'
